@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, Eye, Download, ArrowLeft, FileText } from "lucide-react";
+import { Plus, Minus, Eye, Download, ArrowLeft, FileText, Upload } from "lucide-react";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface InvoiceItem {
   id: string;
@@ -22,6 +24,14 @@ interface ClientInfo {
   address: string;
 }
 
+interface CompanyInfo {
+  name: string;
+  logo: string;
+  address: string;
+  email: string;
+  phone: string;
+}
+
 const InvoiceForm = () => {
   const navigate = useNavigate();
   const [items, setItems] = useState<InvoiceItem[]>([
@@ -34,7 +44,16 @@ const InvoiceForm = () => {
     address: ""
   });
   
+  const [company, setCompany] = useState<CompanyInfo>({
+    name: "InvoicePro",
+    logo: "",
+    address: "Your Business Address\nCity, State, ZIP",
+    email: "contact@invoicepro.com",
+    phone: "+1 (555) 123-4567"
+  });
+  
   const [taxRate, setTaxRate] = useState(10);
+  const [discountRate, setDiscountRate] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
 
   const addItem = () => {
@@ -64,22 +83,42 @@ const InvoiceForm = () => {
     return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
   };
 
+  const calculateDiscount = () => {
+    return (calculateSubtotal() * discountRate) / 100;
+  };
+
   const calculateTax = () => {
-    return (calculateSubtotal() * taxRate) / 100;
+    const afterDiscount = calculateSubtotal() - calculateDiscount();
+    return (afterDiscount * taxRate) / 100;
   };
 
   const calculateTotal = () => {
-    return calculateSubtotal() + calculateTax();
+    return calculateSubtotal() - calculateDiscount() + calculateTax();
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setCompany({ ...company, logo: result });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   if (showPreview) {
     return <InvoicePreview 
       items={items}
       client={client}
+      company={company}
       subtotal={calculateSubtotal()}
+      discount={calculateDiscount()}
       tax={calculateTax()}
       total={calculateTotal()}
       taxRate={taxRate}
+      discountRate={discountRate}
       onBack={() => setShowPreview(false)}
     />;
   }
@@ -118,6 +157,71 @@ const InvoiceForm = () => {
           </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
+        {/* Company Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Company Information</CardTitle>
+            <CardDescription>Enter your company details</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="company-name">Company Name</Label>
+              <Input
+                id="company-name"
+                value={company.name}
+                onChange={(e) => setCompany({ ...company, name: e.target.value })}
+                placeholder="Enter company name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-logo">Company Logo</Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="company-logo"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="flex-1"
+                />
+                {company.logo && (
+                  <img src={company.logo} alt="Logo preview" className="w-12 h-12 object-contain rounded border" />
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-address">Address</Label>
+              <Textarea
+                id="company-address"
+                value={company.address}
+                onChange={(e) => setCompany({ ...company, address: e.target.value })}
+                placeholder="Enter company address"
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="company-email">Email</Label>
+                <Input
+                  id="company-email"
+                  type="email"
+                  value={company.email}
+                  onChange={(e) => setCompany({ ...company, email: e.target.value })}
+                  placeholder="company@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-phone">Phone</Label>
+                <Input
+                  id="company-phone"
+                  value={company.phone}
+                  onChange={(e) => setCompany({ ...company, phone: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Client Information */}
         <Card>
           <CardHeader>
@@ -156,6 +260,9 @@ const InvoiceForm = () => {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
 
         {/* Invoice Settings */}
         <Card>
@@ -188,15 +295,27 @@ const InvoiceForm = () => {
                 defaultValue={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="tax-rate">Tax Rate (%)</Label>
-              <Input
-                id="tax-rate"
-                type="number"
-                value={taxRate}
-                onChange={(e) => setTaxRate(Number(e.target.value))}
-                placeholder="Enter tax rate"
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="tax-rate">Tax Rate (%)</Label>
+                <Input
+                  id="tax-rate"
+                  type="number"
+                  value={taxRate}
+                  onChange={(e) => setTaxRate(Number(e.target.value))}
+                  placeholder="Enter tax rate"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="discount-rate">Discount (%)</Label>
+                <Input
+                  id="discount-rate"
+                  type="number"
+                  value={discountRate}
+                  onChange={(e) => setDiscountRate(Number(e.target.value))}
+                  placeholder="Enter discount"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -276,6 +395,12 @@ const InvoiceForm = () => {
                 <span className="text-muted-foreground">Subtotal:</span>
                 <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
               </div>
+              {discountRate > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Discount ({discountRate}%):</span>
+                  <span className="font-medium text-green-600">-${calculateDiscount().toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tax ({taxRate}%):</span>
                 <span className="font-medium">${calculateTax().toFixed(2)}</span>
@@ -306,21 +431,59 @@ const InvoiceForm = () => {
 const InvoicePreview = ({ 
   items, 
   client, 
+  company,
   subtotal, 
+  discount,
   tax, 
   total, 
   taxRate, 
+  discountRate,
   onBack 
 }: {
   items: InvoiceItem[];
   client: ClientInfo;
+  company: CompanyInfo;
   subtotal: number;
+  discount: number;
   tax: number;
   total: number;
   taxRate: number;
+  discountRate: number;
   onBack: () => void;
 }) => {
   const navigate = useNavigate();
+  const invoiceRef = useRef<HTMLDivElement>(null);
+
+  const downloadPDF = async () => {
+    if (!invoiceRef.current) return;
+
+    const canvas = await html2canvas(invoiceRef.current, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF();
+    const imgWidth = 210;
+    const pageHeight = 295;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    pdf.save(`invoice-${Date.now().toString().slice(-6)}.pdf`);
+  };
   
   return (
     <div className="min-h-screen bg-background">
@@ -351,7 +514,7 @@ const InvoicePreview = ({
               <Button variant="outline" onClick={onBack}>
                 Back to Edit
               </Button>
-              <Button>
+              <Button onClick={downloadPDF}>
                 <Download className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>
@@ -359,7 +522,7 @@ const InvoicePreview = ({
           </div>
 
       {/* Invoice Preview */}
-      <Card className="p-8">
+      <Card className="p-8" ref={invoiceRef}>
         <div className="space-y-8">
           {/* Header */}
           <div className="flex justify-between items-start">
@@ -367,11 +530,14 @@ const InvoicePreview = ({
               <h2 className="text-3xl font-bold text-primary">INVOICE</h2>
               <p className="text-muted-foreground mt-2">INV-{Date.now().toString().slice(-6)}</p>
             </div>
-            <div className="text-right">
-              <h3 className="font-semibold text-lg">InvoicePro</h3>
-              <p className="text-muted-foreground">Your Business Address</p>
-              <p className="text-muted-foreground">City, State, ZIP</p>
-              <p className="text-muted-foreground">contact@invoicepro.com</p>
+            <div className="text-right flex flex-col items-end">
+              {company.logo && (
+                <img src={company.logo} alt="Company logo" className="w-16 h-16 object-contain mb-2" />
+              )}
+              <h3 className="font-semibold text-lg">{company.name}</h3>
+              <p className="text-muted-foreground whitespace-pre-line">{company.address}</p>
+              <p className="text-muted-foreground">{company.email}</p>
+              <p className="text-muted-foreground">{company.phone}</p>
             </div>
           </div>
 
@@ -427,6 +593,12 @@ const InvoicePreview = ({
                 <span className="text-muted-foreground">Subtotal:</span>
                 <span>${subtotal.toFixed(2)}</span>
               </div>
+              {discountRate > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Discount ({discountRate}%):</span>
+                  <span className="text-green-600">-${discount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tax ({taxRate}%):</span>
                 <span>${tax.toFixed(2)}</span>
