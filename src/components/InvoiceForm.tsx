@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Plus, Minus, Eye, Download, ArrowLeft, FileText, Upload } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 interface InvoiceItem {
   id: string;
@@ -124,6 +125,7 @@ const InvoiceForm = () => {
   }
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card">
@@ -425,6 +427,7 @@ const InvoiceForm = () => {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 
