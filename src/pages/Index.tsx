@@ -1,16 +1,22 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Calculator, Download, Users } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { AuthForm } from "@/components/AuthForm";
 
 const Index = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, loading } = useAuth();
 
-  if (isAuthenticated) {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (user) {
     return <Dashboard />;
   }
 
@@ -57,62 +63,7 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Auth Forms */}
-          <Card className="max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle>Get Started</CardTitle>
-              <CardDescription>Create your account to start generating invoices</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="signup">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                  <TabsTrigger value="signin">Sign In</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="signup" className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
-                    <Input id="signup-name" placeholder="Enter your name" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input id="signup-email" type="email" placeholder="Enter your email" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <Input id="signup-password" type="password" placeholder="Create a password" />
-                  </div>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => setIsAuthenticated(true)}
-                  >
-                    Create Account
-                  </Button>
-                </TabsContent>
-                
-                <TabsContent value="signin" className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <Input id="signin-email" type="email" placeholder="Enter your email" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <Input id="signin-password" type="password" placeholder="Enter your password" />
-                  </div>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => setIsAuthenticated(true)}
-                  >
-                    Sign In
-                  </Button>
-                  <Button variant="ghost" className="w-full text-sm">
-                    Forgot Password?
-                  </Button>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+          <AuthForm />
         </div>
       </section>
     </div>
@@ -121,6 +72,7 @@ const Index = () => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
   
   return (
     <div className="min-h-screen bg-background">
@@ -131,7 +83,14 @@ const Dashboard = () => {
             <FileText className="h-8 w-8 text-primary" />
             <span className="text-2xl font-bold text-foreground">InvoicePro</span>
           </div>
-          <Button variant="outline">Logout</Button>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground">
+              Welcome, {user?.user_metadata?.full_name || user?.email}
+            </span>
+            <Button variant="outline" onClick={signOut}>
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
